@@ -9,7 +9,7 @@ import datetime
 import pandas as pd
 import seaborn as sns
 import plotly.express as px
-
+import scipy
 
 def read_CTD_data(file_name, profiler):
     '''
@@ -200,7 +200,7 @@ def calc_moving_average(depth, speed, N=700):
 
     return depth_ma, speed_ma
 
-def get_ssp_SlopeBase():
+def get_ssp_SlopeBase(plot_graph=False):
 
     file_name_deep = 'CSVs/oregon_slope_base_deep_profiler_CTD_20190714_20190715.csv'
     file_name_shallow = 'CSVs/oregon_slope_base_shallow_profiler_CTD_20190714_20190715.csv'
@@ -230,12 +230,12 @@ def get_ssp_SlopeBase():
     depth_ma, speed_ma = calc_moving_average(depth_cut, speed_cut)
 
     # Plot Sound Speed Profile
-    plot_ssp(depth_ma, speed_ma, 'Oregon Slope Base')
+    if plot_graph: plot_ssp(depth_ma, speed_ma, 'Oregon Slope Base')
 
     ssp = np.vstack((depth_ma, speed_ma)).T
     return ssp
    
-def get_ssp_Offshore():
+def get_ssp_Offshore(plot_graph=False):
 
     file_name_deep = 'CSVs/oregon_Offshore_deep_profiler_CTD_20190714_20190715.csv'
     file_name_shallow = 'CSVs/oregon_Offshore_shallow_profiler_CTD_20190714_20190715.csv'
@@ -260,8 +260,68 @@ def get_ssp_Offshore():
 
 
     # Plot Sound Speed Profile
-    plot_ssp(depth_ma, speed_ma, 'Oregon Offshore')
+    if plot_graph: plot_ssp(depth_ma, speed_ma, 'Oregon Offshore')
 
     ssp = np.vstack((depth_ma, speed_ma)).T
 
+    return ssp
+
+def combine_SlopeBase_Offshore(SlopeBase_ssp, Offshore_ssp):
+    '''
+    combine_SlopeBase_Offshore(SlopeBase_ssp, Offshore_ssp):
+        combines the seperate ssps into a single Pandas datafram, which is compatible with arlpy input
+    
+    INPUTS:
+    SlopeBase_ssp (numpy array) - sound speed profile from Oregon Slope Base
+    Offshore_ssp (numpy array) - sound speed profile from Oregon Offshore
+
+    OUPUTS:
+    ssp (Pandas Data Frame) - range and depth dependant sound speed profile for line between Oregon Slope Base and Oregon Offshore OOI Sensor Packages
+    '''
+
+    #unpack inputs
+    SlopeBase_depth = SlopeBase_ssp[:,0]
+    SlopeBase_speed = SlopeBase_ssp[:,1]
+
+    Offshore_depth = Offshore_ssp[:,0]
+    Offshore_speed = Offshore_ssp[:,1]
+
+    # Loop Through and Interpolate for New Depth
+    SlopeBase_interp = scipy.interpolate.interp1d(SlopeBase_depth, SlopeBase_speed, kind='cubic')
+    Offshore_interp = scipy.interpolate.interp1d(Offshore_depth, Offshore_speed, kind='cubic')
+
+    
+
+    N=1000
+    #Max depth hardcoded from bathymetry data
+    depth = np.linspace(0,2910 + 1,N)
+    
+    SlopeBase_speed_new = np.zeros((N,1))
+    Offshore_speed_new = np.zeros((N,1))
+
+    for k in range(depth.shape[0]):
+        if(depth[k] <= Offshore_depth[0]):
+            Offshore_speed_new[k] = Offshore_speed[0]
+        elif(depth[k] <= Offshore_depth[-1]):
+            Offshore_speed_new[k] = Offshore_interp(depth[k])
+        else:
+            Offshore_speed_new[k] = Offshore_speed[-1]
+        
+        
+        if(depth[k] <= SlopeBase_depth[0]):
+            SlopeBase_speed_new[k] = SlopeBase_speed[0]
+        elif(depth[k] <= SlopeBase_depth[-1]):
+            SlopeBase_speed_new[k] = SlopeBase_interp(depth[k])
+        else:
+            SlopeBase_speed_new[k] = SlopeBase_speed[-1]
+    
+
+    #Create Pandas Data Frame
+
+    ssp = pd.DataFrame({
+        0: list(Offshore_speed_new),        #Speeds at Oregon Offshore
+        38001: list(SlopeBase_speed_new)},   #Speeds at Oregon SlopeBase,
+        index=list(depth)                   # depths of profile
+    )
+    
     return ssp
