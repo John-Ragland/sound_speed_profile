@@ -59,9 +59,6 @@ def read_CTD_data(file_name, profiler):
 
     return [pressures_MPa, temps_C, salinities_ppt, data_time]
 
-
-
-
 def calc_ssp(data_list):
     # unpack data_list
     pressures_MPa = data_list[0]
@@ -139,9 +136,7 @@ def calc_ssp(data_list):
 
     return depth_m, c
 
-
-
-def plot_ssp(depth_m, c, save_file=False, file_name=None):
+def plot_ssp(depth_m, c, plot_title, save_file=False, file_name=None, ):
 
     sns.set()
 
@@ -150,7 +145,7 @@ def plot_ssp(depth_m, c, save_file=False, file_name=None):
     fig.suptitle('Depth of Ocean vs. Speed of Sound', fontsize=16, fontweight='bold')
 
     ax = fig.add_subplot(111)
-    ax.set_title('Oregon Slope Base',fontsize=12)
+    ax.set_title(plot_title ,fontsize=12)
     ax.plot(c,depth_m,'.')
     fig.subplots_adjust(top=0.87)
     ax.set_xlabel('Speed of Sound $(m/s)$')
@@ -166,28 +161,17 @@ def plot_ssp(depth_m, c, save_file=False, file_name=None):
             fig.savefig(file_name, dpi=500)
     return
 
-
 def manually_cut_to_8_passes(depth_m_shallow, c_shallow):
     # Cut Shallow data to just 8 passes
     depth_m_shallow = depth_m_shallow[1197:35467]
     c_shallow = c_shallow[1197:35467]
     return depth_m_shallow, c_shallow
 
-
-
-# ## Combine 2 SSPs
-
 def combine_ssps(depth_shallow, speed_shallow, depth_deep, speed_deep):
     c_combined = np.concatenate((speed_deep,speed_shallow))
     depth_combined = np.concatenate((depth_deep,depth_shallow))
     return depth_combined, c_combined
 
-
-
-
-
-
-# ## Combine into 1 variable
 def sort_ssp(depth_combined, c_combined):  
     ssp = np.hstack((depth_combined, c_combined))
 
@@ -209,7 +193,6 @@ def manually_cut_problems(depth, speed):
 
     return depth_cut, speed_cut
 
-
 def calc_moving_average(depth, speed, N=700):
 
     depth_ma = np.convolve(depth, np.ones((N,))/N, mode='valid')
@@ -217,8 +200,7 @@ def calc_moving_average(depth, speed, N=700):
 
     return depth_ma, speed_ma
 
-
-def get_ssp_PC01A():
+def get_ssp_SlopeBase():
 
     file_name_deep = 'CSVs/oregon_slope_base_deep_profiler_CTD_20190714_20190715.csv'
     file_name_shallow = 'CSVs/oregon_slope_base_shallow_profiler_CTD_20190714_20190715.csv'
@@ -248,8 +230,38 @@ def get_ssp_PC01A():
     depth_ma, speed_ma = calc_moving_average(depth_cut, speed_cut)
 
     # Plot Sound Speed Profile
-    plot_ssp(depth_ma, speed_ma)
+    plot_ssp(depth_ma, speed_ma, 'Oregon Slope Base')
 
     ssp = np.vstack((depth_ma, speed_ma)).T
     return ssp
    
+def get_ssp_Offshore():
+
+    file_name_deep = 'CSVs/oregon_Offshore_deep_profiler_CTD_20190714_20190715.csv'
+    file_name_shallow = 'CSVs/oregon_Offshore_shallow_profiler_CTD_20190714_20190715.csv'
+
+    profiler1 = 'deep'
+    profiler2 = 'shallow'
+
+    data_out_deep = read_CTD_data(file_name_deep, profiler1)
+    data_out_shallow = read_CTD_data(file_name_shallow, profiler2)
+
+    depth_shallow, speed_shallow = calc_ssp(data_out_shallow)
+    depth_deep, speed_deep = calc_ssp(data_out_deep)
+
+    # Combine 2 ssps
+    depth, speed = combine_ssps(depth_shallow, speed_shallow, depth_deep, speed_deep)
+
+    #Sort 2 ssps
+    depth_sort, speed_sort = sort_ssp(depth, speed)
+
+
+    depth_ma, speed_ma = calc_moving_average(depth_sort, speed_sort)
+
+
+    # Plot Sound Speed Profile
+    plot_ssp(depth_ma, speed_ma, 'Oregon Offshore')
+
+    ssp = np.vstack((depth_ma, speed_ma)).T
+
+    return ssp
